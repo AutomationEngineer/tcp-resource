@@ -1,6 +1,3 @@
-//var serialPortLib = require('serialport');
-//var SerialPort = serialPortLib.SerialPort;
-var SerialPort = require('serialport');
 
 function SerialResource(portName, parameters, silent, callbackOpen) {
 
