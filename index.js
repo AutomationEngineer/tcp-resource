@@ -1,68 +1,89 @@
+var Net = require('net');
 
-function SerialResource(portName, parameters, silent, callbackOpen) {
+function tcpResource(host, port, callbackOpen) {
+    var context = this;
 
-    if (typeof parameters === 'object'){
-        parameters.autoOpen = false;
-    } else {
-        parameters = {autoOpen: false};
-    }
+    context.usersQueue = [];
+    context.usersQueue.currentUserNo = 0;
 
-    var port = new SerialPort(portName, parameters);
-    this.port = port;
-
-    var usersQueue = [];
-    this.usersQueue = usersQueue;
-    this.usersQueue.currentUserNo = 0;
-
-    port.open(function(error){
-        if(error){
-            console.log('Failed to open ' + port.path);
-        } else {
-            console.log('Port '+port.path+' is opened.');
-
-            port.on('data', function(data) {
-                if(usersQueue.currentUserNo < usersQueue.length){
-                    var user = usersQueue[usersQueue.currentUserNo];
-                    if(typeof user.onData === "function")user.onData(data);
-                }
-            });
-            port.on('error', function(error) {
-                if(usersQueue.currentUserNo < usersQueue.length){
-                    var user = usersQueue[usersQueue.currentUserNo];
-                    if(typeof user.onError === "function")user.onError(error);
-                }
-            });
+    function connect(){
+        console.log('TCP Resource connecting to: ' + host + ':' + port );
+        context.socket = Net.createConnection({port: port, host:host}, () => {
+                console.log('TCP Resource connected to: ' + host + ':' + port );
+        if(typeof callbackOpen === "function"){
+            callbackOpen();
+            callbackOpen = false; // to callback at first time only;
         }
-
-        if(typeof callbackOpen === "function")callbackOpen(error);
+        if(context.pendingGo){
+            //context.pendingGo = false;
+            go(context);
+        }
     });
+
+    context.socket.on('data', function(data) {
+        if(context.usersQueue.currentUserNo < context.usersQueue.length){
+            var user = context.usersQueue[context.usersQueue.currentUserNo];
+            if(typeof user.onData === "function")user.onData(data);
+        }
+        console.log('TCP Resource data:' + JSON.stringify(data));
+    }).on('close', function() {
+        console.log('TCP Resource connection closed: ' + host + ':' + port );
+        if(context.pendingGo){ // to inform subscribers about connection problems
+            //context.pendingGo = false;
+            go(context);
+        }
+        setTimeout(connect, 1000);
+    }).on('error', function(error) {
+        console.log('TCP Resource error: ' + error);
+        if(context.usersQueue.currentUserNo < context.usersQueue.length){
+            var user = context.usersQueue[context.usersQueue.currentUserNo];
+            if(typeof user.onError === "function")user.onError(error);
+        }
+    });
+
 }
 
-SerialResource.prototype.addUser = function(user) {
+connect();
+}
+
+
+tcpResource.prototype.addUser = function(user) {
     this.usersQueue.push(user);
     return this;
 };
 
-SerialResource.prototype.startQueue = function() {
+function go(context){
+    if((!context.pendingGo) && (context.socket.destroyed || context.socket.connecting)){
+        context.pendingGo = true;
+    } else {
+        context.pendingGo = false;
+        var user = context.usersQueue[context.usersQueue.currentUserNo];
+        if (typeof user.go === "function")setTimeout(function () {
+            user.go();
+        }, 0);
+    }
+}
+
+tcpResource.prototype.startQueue = function() {
     if(this.usersQueue.length > 0){
-        var user = this.usersQueue[this.usersQueue.currentUserNo];
-        if(typeof user.go === "function")setTimeout(function(){user.go();},0);
+        go(this);
     }
 };
 
-SerialResource.prototype.userFinished = function() {
+tcpResource.prototype.userFinished = function() {
     if(this.usersQueue.length > 0){
         this.usersQueue.currentUserNo++;
         if(this.usersQueue.currentUserNo >= this.usersQueue.length)this.usersQueue.currentUserNo = 0;
-        var user = this.usersQueue[this.usersQueue.currentUserNo];
-        if(typeof user.go === "function")setTimeout(function(){
-            user.go();
-        },0);
+        go(this);
     }
 };
 
-SerialResource.prototype.write = function(data, handler) {
-    this.port.write(data, handler);
+tcpResource.prototype.write = function(data, handler) {
+    if(this.socket.destroyed || this.socket.connecting){
+        handler('Socket is not connected');
+    } else {
+        this.socket.write(data, handler);
+    }
 };
 
-module.exports = SerialResource;
+module.exports = tcpResource;
