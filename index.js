@@ -25,7 +25,7 @@ function tcpResource(host, port, callbackOpen) {
             var user = context.usersQueue[context.usersQueue.currentUserNo];
             if(typeof user.onData === "function")user.onData(data);
         }
-        console.log('TCP Resource data:' + JSON.stringify(data));
+        //console.log('TCP Resource data:' + JSON.stringify(data));
     }).on('close', function() {
         console.log('TCP Resource connection closed: ' + host + ':' + port );
         if(context.pendingGo){ // to inform subscribers about connection problems

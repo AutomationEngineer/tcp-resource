@@ -1,6 +1,6 @@
 {
   "name": "tcp-resource",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "TCP port sharing utility for node.js",
   "main": "index.js",
   "dependencies": {
